@@ -72,7 +72,7 @@ def parse_bar_plus_html(html: str, page: int) -> Tuple[Dict[str, BarPlusSong], O
     if len(songs) == 1 and len(songs[0]) < 4:
         # there are no songs
         return {}, None
-    songs = [BarPlusSong(song[1].strip(), song[2].strip(), song[3].strip(), song[0].strip()) for song in songs]
+    songs = [BarPlusSong(song[1].strip().lower(), song[2].strip().lower(), song[3].strip(), song[0].strip()) for song in songs]
     artists_songs = {}
     for song in songs:
         if song.artist not in artists_songs:
@@ -106,7 +106,7 @@ def query_songs_by_artist(artist: str) -> List[BarPlusSong]:
     while page is not None:
         html = query_bar_plus("artist", artist, page)
         songs, next_page = parse_bar_plus_html(html, page)
-        if len(songs) == 0:
+        if len(songs) == 0 or songs.get(artist) is None:
             # no songs
             return []
         songs = songs[artist]  # dictionary
@@ -158,11 +158,13 @@ def main(method: str, csv_path: str, strict: bool):
             reader = csv.reader(f, delimiter=",")
             fields = next(reader)  # skip field names
             count = 0
-            for i, row in enumerate(reader):
-                if row[ARTIST] not in artists_songs:
-                    artists_songs[row[ARTIST]] = [row[TRACK]]
+            for row in reader:
+                artist = row[ARTIST].lower()
+                name = row[TRACK].lower()
+                if artist not in artists_songs:
+                    artists_songs[artist] = [name]
                 else:
-                    artists_songs[row[ARTIST]].append(row[TRACK])
+                    artists_songs[artist].append(name)
                 count += 1
 
             # for key in artists_songs:
@@ -184,18 +186,19 @@ def main(method: str, csv_path: str, strict: bool):
     # Display results (text files?)
     click.echo("Writing results to files")
     timestamp = datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
-    with open(f"wanted-songs-found-{timestamp}.txt", "w", encoding="utf-8") as file:
-        writer = csv.DictWriter(file, fieldnames=["artist", "name", "lang"], lineterminator='\n')
+    with open(f"wanted-songs-found-{timestamp}.csv", "w", encoding="utf-8") as file:
+        writer = csv.DictWriter(file, fieldnames=["artist", "name", "lang", "id"], lineterminator='\n')
         writer.writeheader()
         writer.writerows(map(lambda x: asdict(x), sorted(all_requested, key=lambda x: x.artist)))
 
-    with open(f"bonus-songs-found-{timestamp}.txt", "w", encoding="utf-8") as file:
-        writer = csv.DictWriter(file, fieldnames=["artist", "name", "lang"], lineterminator='\n')
+    with open(f"bonus-songs-found-{timestamp}.csv", "w", encoding="utf-8") as file:
+        writer = csv.DictWriter(file, fieldnames=["artist", "name", "lang", "id"], lineterminator='\n')
         writer.writeheader()        
         writer.writerows(map(lambda x: asdict(x), sorted(all_bonus, key=lambda x: x.artist)))
 
-    with open(f"wanted-songs-missing-{timestamp}.txt", "w", encoding="utf-8") as file:
-        file.writelines(sorted(all_missing))
+    with open(f"wanted-songs-missing-{timestamp}.csv", "w", encoding="utf-8") as file:
+        writer = csv.writer(file, lineterminator='\n')
+        writer.writerows(sorted(all_missing))
 
     click.echo("Done!")
 
