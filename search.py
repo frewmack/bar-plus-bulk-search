@@ -242,9 +242,9 @@ def main(method: str, csv_path: str, strict: bool):
                 all_bonus.extend(bonus)
                 all_missing.append((artists_songs[artist_lower][ARTIST], missing))
     
-    all_requested.sort(key=lambda song: song.artist)
-    all_bonus.sort(key=lambda song: song.artist)
-    all_missing.sort(key=lambda x: x[ARTIST])
+    all_requested.sort(key=lambda song: (song.artist, song.name))
+    all_bonus.sort(key=lambda song: (song.artist, song.name))
+    all_missing.sort(key=lambda x: (x[ARTIST], x[TRACK]))
 
     # Display results (text files?)
     click.echo("Writing results to files")
