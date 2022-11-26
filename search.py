@@ -2,7 +2,7 @@
 A script for mass-querying the Bar+ karaoke song index based on a CSV of wanted songs/artists.
 
 Tool for exporting Spotify playlists to CSV: https://www.spotlistr.com/export/spotify-playlist
-
+    - Only select "Artist(s) Name" and "Track Name", and choose "," as separator
 """
 import os, csv, requests, re
 from dataclasses import dataclass, asdict
@@ -232,8 +232,6 @@ def main(method: str, csv_path: str, strict: bool):
 
             for a in temp_missing:
                 all_missing.append((a, temp_missing[a]))
-
-
     else:
         with click.progressbar(artists_songs, length=len(artists_songs), label="Querying Bar+ song index by artist") as bar:
             for artist_lower in bar:
@@ -243,6 +241,10 @@ def main(method: str, csv_path: str, strict: bool):
                 all_requested.extend(requested)
                 all_bonus.extend(bonus)
                 all_missing.append((artists_songs[artist_lower][ARTIST], missing))
+    
+    all_requested.sort(key=lambda song: song.artist)
+    all_bonus.sort(key=lambda song: song.artist)
+    all_missing.sort(key=lambda x: x[ARTIST])
 
     # Display results (text files?)
     click.echo("Writing results to files")
