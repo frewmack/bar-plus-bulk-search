@@ -11,6 +11,14 @@ from datetime import datetime
 import click
 from bs4 import BeautifulSoup
 
+# Constants
+
+ARTIST = 0
+TRACK = 1
+REQUEST_DELAY = 0.2
+BAR_PLUS_URL = "https://bar-plus.com/song/index"
+
+# Classes
 
 @dataclass
 class BarPlusSong:
@@ -22,14 +30,7 @@ class BarPlusSong:
     def dict(self):
         return {k: str(v) for k, v in asdict(self).items()}
 
-
-ARTIST = 0
-TRACK = 1
-
-REQUEST_DELAY = 0.2
-
-BAR_PLUS_URL = "https://bar-plus.com/song/index"
-
+# Functions
 
 def query_bar_plus(method: str, field: str, page=1) -> str:
     """
@@ -58,7 +59,7 @@ def query_bar_plus(method: str, field: str, page=1) -> str:
     return result
 
 
-def parse_bar_plus_html(html: str, page: int) -> Tuple[Dict[str, BarPlusSong], Optional[int]]:
+def parse_bar_plus_html(html: str, page: int) -> Tuple[Dict[str, Tuple[str, List[BarPlusSong]]], Optional[int]]:
     """
     Parses a page from the Bar+ song index.
     
@@ -117,6 +118,26 @@ def query_songs_by_artist(artist: str) -> List[BarPlusSong]:
     return all_songs
 
 
+def query_songs_by_title(title: str) -> List[BarPlusSong]:
+    """
+    Given a song title, return a list of every song with that title in
+    the Bar+ catalog.
+    """
+    page = 1
+    all_songs = []
+    while page is not None:
+        html = query_bar_plus("track", title, page)
+        songs, next_page = parse_bar_plus_html(html, page)
+        # We get every song with that title, regardless of
+        if len(songs) == 0:
+            # no songs
+            return []
+        for artist in songs:
+            all_songs.extend(songs[artist][TRACK])
+        page = next_page
+    return all_songs
+
+
 def organize_found_songs(wanted_songs: List[str], found_songs: List[BarPlusSong]) -> Tuple[List[BarPlusSong], List[BarPlusSong], List[Tuple[str, str]]]:
     """
     Organize songs found by a certain artist.
@@ -143,7 +164,7 @@ def organize_found_songs(wanted_songs: List[str], found_songs: List[BarPlusSong]
             bonus.append(song)
 
     missing = [wanted_songs[i] for i in wanted_songs_dict.values()]
-        
+
     return requested, bonus, missing
 
 
@@ -174,17 +195,44 @@ def main(method: str, csv_path: str, strict: bool):
             #     artists_songs[key].sort()
             
             click.echo(f"Lists compiled. {len(artists_songs)} total artists, {count} total songs")
-    
+
     # Query loop, populate lists
     all_requested, all_bonus, all_missing = [], [], []
-    with click.progressbar(artists_songs, length=len(artists_songs), label="Querying Bar+ song index") as bar:
-        for artist_lower in bar:
-            wanted_songs = artists_songs[artist_lower][TRACK]
-            found_songs = query_songs_by_artist(artists_songs[artist_lower][ARTIST])
-            requested, bonus, missing = organize_found_songs(wanted_songs, found_songs)
-            all_requested.extend(requested)
-            all_bonus.extend(bonus)
-            all_missing.append((artists_songs[artist_lower][ARTIST], missing))
+    if strict:
+        all_wanted = []
+        for tup in artists_songs.values():
+            artist, songs = tup
+            all_wanted.extend([(artist, song) for song in songs])
+        temp_missing = {}
+        with click.progressbar(all_wanted, length=len(all_wanted), label="Querying Bar+ song index by song title") as bar:
+            for wanted_artist, wanted_song in bar:
+                found_songs = query_songs_by_title(wanted_song)
+                wanted_found = False
+                for found_song in found_songs:
+                    if found_song.artist.lower().strip() == wanted_artist.lower().strip() \
+                            and found_song.name.lower().strip() == wanted_song.lower().strip():
+                        wanted_found = True
+                        all_requested.append(found_song)
+                        break
+                if not wanted_found:
+                    if wanted_artist not in temp_missing:
+                        temp_missing[wanted_artist] = [wanted_song]
+                    else:
+                        temp_missing[wanted_artist].append(wanted_song)
+
+            for a in temp_missing:
+                all_missing.append((a, temp_missing[a]))
+
+
+    else:
+        with click.progressbar(artists_songs, length=len(artists_songs), label="Querying Bar+ song index by artist") as bar:
+            for artist_lower in bar:
+                wanted_songs = artists_songs[artist_lower][TRACK]
+                found_songs = query_songs_by_artist(artists_songs[artist_lower][ARTIST])
+                requested, bonus, missing = organize_found_songs(wanted_songs, found_songs)
+                all_requested.extend(requested)
+                all_bonus.extend(bonus)
+                all_missing.append((artists_songs[artist_lower][ARTIST], missing))
 
     # Display results (text files?)
     click.echo("Writing results to files")
@@ -204,6 +252,7 @@ def main(method: str, csv_path: str, strict: bool):
             writer.writerows([(artist, song) for song in songs])
 
     click.echo("Done!")
+
 
 if __name__ == "__main__":
     main()
