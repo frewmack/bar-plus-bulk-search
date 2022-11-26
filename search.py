@@ -1,15 +1,21 @@
 """
 A script for mass-querying the Bar+ karaoke song index based on a CSV of wanted songs/artists.
-"""
 
+Tool for exporting Spotify playlists to CSV: https://www.spotlistr.com/export/spotify-playlist
+
+"""
 import os, csv, requests, re
 from dataclasses import dataclass, asdict
 from typing import Tuple, Optional, List, Dict
 from time import sleep
 from datetime import datetime
 
+from dotenv import load_dotenv
 import click
 from bs4 import BeautifulSoup
+
+
+load_dotenv()
 
 # Constants
 
@@ -17,6 +23,8 @@ ARTIST = 0
 TRACK = 1
 REQUEST_DELAY = 0.2
 BAR_PLUS_URL = "https://bar-plus.com/song/index"
+
+# SPOTIFY_CLIENT = spotify.Client(os.getenv("SPOTIFY_CLIENT_ID"), os.getenv("SPOTIFY_CLIENT_SECRET"))
 
 # Classes
 
@@ -169,7 +177,7 @@ def organize_found_songs(wanted_songs: List[str], found_songs: List[BarPlusSong]
 
 
 @click.command()
-@click.option("--method", type=click.Choice(["csv"]), required=True, help="Method for obtaining song list.")
+@click.option("--method", type=click.Choice(["csv", "spotify"]), required=True, help="Method for obtaining song list.")
 @click.option("--csv-path", type=click.Path(exists=True), help="Path to CSV song/artist list file")
 @click.option("--strict", is_flag=True, help="Query by song name only. Faster and potentially more accurate, but will not show other songs by same artist in results.")
 def main(method: str, csv_path: str, strict: bool):
@@ -183,8 +191,8 @@ def main(method: str, csv_path: str, strict: bool):
 
             count = 0
             for row in reader:
-                artist = row[ARTIST]
-                name = row[TRACK]
+                artist = row[ARTIST].strip()
+                name = row[TRACK].strip()
                 if artist.lower() not in artists_songs:
                     artists_songs[artist.lower()] = (artist, [name])
                 else:
@@ -195,6 +203,8 @@ def main(method: str, csv_path: str, strict: bool):
             #     artists_songs[key].sort()
             
             click.echo(f"Lists compiled. {len(artists_songs)} total artists, {count} total songs")
+    elif method == "spotify":
+        pass
 
     # Query loop, populate lists
     all_requested, all_bonus, all_missing = [], [], []
