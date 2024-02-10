@@ -130,3 +130,5 @@ dmypy.json
 
 # My ignored files
 *.csv
+
+.vscode/
